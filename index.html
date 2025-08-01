@@ -1,247 +1,185 @@
-import { useState, useEffect } from 'react';
-import { Search, Loader, Copy, X } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>أكواد خدمات فوري</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        header h1 {
+            font-size: 28px;
+            font-weight: bold;
+        }
+        header p {
+            font-size: 18px;
+            color: #555;
+        }
+        .search-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+        input {
+            padding: 10px;
+            border-radius: 25px;
+            border: 2px solid #ccc;
+            flex: 1;
+        }
+        button {
+            padding: 10px 20px;
+            border-radius: 25px;
+            border: none;
+            background-color: #10b981;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #059669;
+        }
+        .grid {
+            display: grid;
+            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            margin-top: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            width: 300px;
+            text-align: center;
+        }
+        .close {
+            cursor: pointer;
+            color: red;
+            float: left;
+        }
+        .copy-message {
+            color: green;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>أكواد خدمات فوري</h1>
+        <p>ابحث عن أي خدمة باستخدام الذكاء الاصطناعي</p>
+    </header>
 
-// Helper function for exponential backoff
-const withExponentialBackoff = async (func, maxRetries = 5) => {
-  for (let i = 0; i <= maxRetries; i++) {
-    try {
-      return await func();
-    } catch (error) {
-      if (i === maxRetries) throw error;
-      const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-      console.warn(`API call failed. Retrying in ${delay}ms...`);
-      await new Promise(res => setTimeout(res, delay));
-    }
-  }
-};
-
-const ServiceCard = ({ service, onShowCode }) => (
-    <div className="service-card bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300">
-        <h2 className="text-xl font-semibold text-slate-800 mb-2">{service.name}</h2>
-        <p className="text-slate-600 mb-4">الشركة: {service.company} | النوع: {service.type}</p>
-        <button
-            onClick={() => onShowCode(service.code)}
-            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-xl shadow-md transition-colors duration-200"
-        >
-            عرض الكود
-        </button>
+    <div class="search-container">
+        <input type="text" id="query" placeholder="اكتب اسم الشركة أو الخدمة..." />
+        <button onclick="fetchServices()">بحث</button>
     </div>
-);
 
-const CodeModal = ({ code, onClose }) => {
-    const [copyMessage, setCopyMessage] = useState('');
+    <div id="results" class="grid"></div>
 
-    const handleCopy = () => {
-        const tempInput = document.createElement('textarea');
-        tempInput.value = code;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        tempInput.setSelectionRange(0, 99999);
-        
-        try {
-            document.execCommand('copy');
-            setCopyMessage('تم النسخ بنجاح!');
-        } catch (err) {
-            setCopyMessage('فشل النسخ!');
-        }
-        
-        document.body.removeChild(tempInput);
-        setTimeout(() => setCopyMessage(''), 2000);
-    };
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300">
-            <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full mx-4 relative">
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 left-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"
-                >
-                    <X size={24} />
-                </button>
-                <h3 className="text-2xl font-bold text-slate-800 mb-4">كود الخدمة</h3>
-                <div className="bg-slate-100 border border-slate-200 rounded-xl p-4 text-center mb-4">
-                    <span className="font-mono text-4xl sm:text-5xl font-bold text-emerald-600">{code}</span>
-                </div>
-                <button
-                    onClick={handleCopy}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors duration-200 flex items-center justify-center gap-2"
-                >
-                    <Copy size={20} />
-                    <span>انسخ الكود</span>
-                </button>
-                {copyMessage && (
-                    <div className="text-center mt-2 text-sm text-green-600 font-semibold animate-pulse">{copyMessage}</div>
-                )}
-            </div>
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">X</span>
+            <h3>كود الخدمة</h3>
+            <div id="serviceCode" style="font-size:24px;font-weight:bold;color:#059669;"></div>
+            <button onclick="copyCode()">انسخ الكود</button>
+            <div id="copyMessage" class="copy-message"></div>
         </div>
-    );
-};
+    </div>
 
-const App = () => {
-    const [query, setQuery] = useState('');
-    const [services, setServices] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [modalCode, setModalCode] = useState(null);
+    <script>
+        let currentCode = '';
 
-    useEffect(() => {
-        // Firebase initialization as required by the environment.
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        
-        if (Object.keys(firebaseConfig).length > 0) {
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            const signIn = async () => {
-                if (typeof __initial_auth_token !== 'undefined') {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                console.log('Firebase auth successful.');
-            };
-            signIn();
-        }
-    }, []);
-
-    const fetchServicesWithAI = async () => {
-        if (!query.trim()) {
-            setServices([]);
-            return;
+        function showModal(code) {
+            currentCode = code;
+            document.getElementById('serviceCode').innerText = code;
+            document.getElementById('modal').style.display = 'flex';
         }
 
-        setIsLoading(true);
-        try {
-            // TODO: Replace with your actual API key
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        function copyCode() {
+            navigator.clipboard.writeText(currentCode).then(() => {
+                document.getElementById('copyMessage').innerText = 'تم النسخ بنجاح!';
+                setTimeout(() => {
+                    document.getElementById('copyMessage').innerText = '';
+                }, 2000);
+            }).catch(() => {
+                document.getElementById('copyMessage').innerText = 'فشل النسخ!';
+            });
+        }
+
+        async function fetchServices() {
+            const query = document.getElementById('query').value.trim();
+            if (!query) return;
+
             const apiKey = "AIzaSyAYAO4ZLRydJsS-uhFm-PUg1DQZBFC95GM";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-            
-            const prompt = `
-            You are a service code search engine for Fawry. A user is looking for a service code.
-            Based on the user's query, identify relevant Fawry services and their corresponding codes.
-            Be flexible and handle single-word queries as well as full sentences.
-            The response must be a JSON array of objects, with each object having the following keys:
-            "name" (service name), "code" (service code), "company" (service provider), and "type" (service type).
-            The keys must be in this exact order.
-            
-            Schema:
-            {
-                "type": "ARRAY",
-                "items": {
-                    "type": "OBJECT",
-                    "properties": {
-                        "name": { "type": "STRING" },
-                        "code": { "type": "STRING" },
-                        "company": { "type": "STRING" },
-                        "type": { "type": "STRING" }
-                    }
-                }
-            }
 
-            Here is the user's query: "${query}".
-            Return only the JSON array of matching services.
+            const prompt = `
+                You are a service code search engine for Fawry...
+                Here is the user's query: "${query}".
+                Return only the JSON array of matching services.
             `;
-            
+
             const payload = {
                 contents: [{ role: "user", parts: [{ text: prompt }] }],
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                "name": { "type": "STRING" },
-                                "code": { "type": "STRING" },
-                                "company": { "type": "STRING" },
-                                "type": { "type": "STRING" }
-                            },
-                            "propertyOrdering": ["name", "code", "company", "type"]
-                        }
-                    }
-                }
+                generationConfig: { responseMimeType: "application/json" }
             };
-            
-            const response = await withExponentialBackoff(() => fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }));
-            
-            const result = await response.json();
-            
-            if (result.candidates && result.candidates.length > 0 && result.candidates[0].content) {
-                const jsonText = result.candidates[0].content.parts[0].text;
-                const parsedJson = JSON.parse(jsonText);
-                setServices(parsedJson);
-            } else {
-                setServices([]);
-                console.error("Unexpected API response structure or no content.", result);
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                const services = JSON.parse(jsonText || '[]');
+                renderServices(services);
+            } catch (error) {
+                console.error(error);
+                renderServices([]);
             }
-
-        } catch (error) {
-            console.error('Failed to fetch services with AI:', error);
-            setServices([]);
-        } finally {
-            setIsLoading(false);
         }
-    };
 
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            fetchServicesWithAI();
+        function renderServices(services) {
+            const container = document.getElementById('results');
+            container.innerHTML = '';
+            if (services.length === 0) {
+                container.innerHTML = '<p>لم يتم العثور على نتائج.</p>';
+                return;
+            }
+            services.forEach(service => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h2>${service.name}</h2>
+                    <p>الشركة: ${service.company} | النوع: ${service.type}</p>
+                    <button onclick="showModal('${service.code}')">عرض الكود</button>
+                `;
+                container.appendChild(card);
+            });
         }
-    };
-
-    return (
-        <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4 text-right">
-            <header className="w-full max-w-6xl text-center mb-8">
-                <h1 className="text-4xl font-extrabold text-gray-800">أكواد خدمات فوري</h1>
-                <p className="mt-2 text-lg text-gray-600">ابحث عن أي خدمة باستخدام الذكاء الاصطناعي</p>
-            </header>
-            
-            <div className="w-full max-w-xl mb-8 flex items-center space-x-2">
-                <input
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="اكتب اسم الشركة أو الخدمة..."
-                    className="flex-grow p-3 rounded-full border-2 border-gray-300 focus:outline-none focus:border-emerald-500 transition-colors"
-                />
-                <button
-                    onClick={fetchServicesWithAI}
-                    className="p-3 bg-emerald-500 text-white rounded-full hover:bg-emerald-600 transition-colors"
-                    disabled={isLoading}
-                >
-                    {isLoading ? <Loader size={24} className="animate-spin" /> : <Search size={24} />}
-                </button>
-            </div>
-            
-            <main className="w-full max-w-6xl">
-                {isLoading ? (
-                    <div className="flex justify-center items-center h-64">
-                        <Loader size={48} className="text-emerald-500 animate-spin" />
-                        <span className="ml-4 text-xl font-semibold text-gray-700">جارٍ البحث...</span>
-                    </div>
-                ) : services.length > 0 ? (
-                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {services.map((service, index) => (
-                            <ServiceCard key={index} service={service} onShowCode={(code) => setModalCode(code)} />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center text-gray-500 text-lg mt-10">
-                        {query ? 'لم يتم العثور على نتائج. حاول بعبارة مختلفة.' : 'ابدأ البحث للعثور على أكواد الخدمات.'}
-                    </div>
-                )}
-            </main>
-            
-            {modalCode && <CodeModal code={modalCode} onClose={() => setModalCode(null)} />}
-        </div>
-    );
-};
-
-export default App;
-
+    </script>
+</body>
+              </html>
